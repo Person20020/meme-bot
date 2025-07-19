@@ -61,3 +61,63 @@ def handle_message(event_data):
         except sqlite3.Error as e:
             print(f"Database error: {e}")
             return 500
+
+
+@app.route('/slack/command')
+def handle_commands():
+    data = request.form
+    command = data.get('command')
+    text = data.get('text')
+    channel_id = data.get('channel_id')
+    user_id = data.get('user_id')
+    user = data.get('user_name')
+
+    if command == "/disable-memes":
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        cursor.execute("SELECT user_id FROM disabled WHERE channel_id = ?", (channel_id,))
+        response = cursor.fetchone()
+        if response:
+            disable_user = response[0]
+            client.chat_postEphemeral(
+                channel=channel_id,
+                user=user_id,
+                text=f"The current channel (<{channel_id}>) has already had meme responses disabled by <@{disable_user}>."
+            )
+        else:
+            cursor.execute("INSERT INTO disabled (user_id, channel) VALUES (?, ?)", (user_id, channel_id))
+            client.chat_postEphemeral(
+                channel=channel_id,
+                user=user_id,
+                text="You have successfully disabled meme responses for this channel."
+            )
+            conn.commit()
+        conn.close()
+        return
+    elif command == "/disable-memes-user":
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor
+        cursor.execute("SELECT * FROM disabled_users WHERE user_id = ?", (user_id,))
+        response = cursor.fetchone()
+        if response:
+            client.chat_postEphemeral(
+                channel=channel_id,
+                user=user_id,
+                text=f"You have already disabled meme responses to you."
+            )
+        else:
+            cursor.execute("INSERT INTO disabled_users (user_id) VALUES (?)", (user_id,))
+            client.chat_postEphemeral(
+                channel=channel_id,
+                user=user_id,
+                text="You have successfully disabled meme responses to you."
+            )
+            conn.commit()
+        conn.close()
+        return
+    else:
+        client.chat_postEphemeral(
+            channel=channel_id,
+            user=user_id,
+            text="An unknown command somehow triggered this bot." 
+        )
